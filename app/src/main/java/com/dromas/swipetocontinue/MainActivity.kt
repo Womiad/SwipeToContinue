@@ -74,14 +74,14 @@ import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.sqrt
 
-private const val LINEAR_ACCEL_MOVING_THRESHOLD = 7.2f
-private const val LINEAR_ACCEL_POINT_THRESHOLD = 10f
-private const val ACCEL_DELTA_MOVING_THRESHOLD = 6.4f
-private const val ACCEL_DELTA_POINT_THRESHOLD = 10.4f
-private const val GYRO_MOVING_THRESHOLD = 5.0f
-private const val GYRO_POINT_THRESHOLD = 12.0f
+private const val LINEAR_ACCEL_MOVING_THRESHOLD = 20f
+private const val LINEAR_ACCEL_POINT_THRESHOLD = 30f
+private const val ACCEL_DELTA_MOVING_THRESHOLD = 20f
+private const val ACCEL_DELTA_POINT_THRESHOLD = 30f
+private const val GYRO_MOVING_THRESHOLD = 20.0f
+private const val GYRO_POINT_THRESHOLD = 48.0f
 
-private const val POINTS_PER_SWIPE = 25
+private const val POINTS_PER_SWIPE = 30
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
