@@ -281,7 +281,7 @@ private fun StepGateScreen(
 ) {
     val context = LocalContext.current
     val pointsPerSwipe = POINTS_PER_SWIPE
-    val videos = remember { loadAssetVideos(context) }
+    val videos = remember { loadAssetVideos(context).shuffled() }
     var currentVideoIndex by remember { mutableIntStateOf(0) }
     var pointsAtCurrentVideoStart by remember { mutableIntStateOf(motionState.points) }
     val pointsSinceCurrentVideoStart = (motionState.points - pointsAtCurrentVideoStart)
