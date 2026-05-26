@@ -3,12 +3,16 @@ package com.dromas.swipetocontinue
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Matrix
+import android.graphics.SurfaceTexture
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.media.MediaPlayer
 import android.os.Build
 import android.os.Bundle
+import android.view.TextureView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -63,18 +67,21 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.dromas.swipetocontinue.ui.theme.SwipeToContinueTheme
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.sqrt
 
-private const val LINEAR_ACCEL_MOVING_THRESHOLD = 3.6f
-private const val LINEAR_ACCEL_POINT_THRESHOLD = 5f
-private const val ACCEL_DELTA_MOVING_THRESHOLD = 3.2f
-private const val ACCEL_DELTA_POINT_THRESHOLD = 5.2f
-private const val GYRO_MOVING_THRESHOLD = 4.0f
-private const val GYRO_POINT_THRESHOLD = 6.0f
+private const val LINEAR_ACCEL_MOVING_THRESHOLD = 7.2f
+private const val LINEAR_ACCEL_POINT_THRESHOLD = 10f
+private const val ACCEL_DELTA_MOVING_THRESHOLD = 6.4f
+private const val ACCEL_DELTA_POINT_THRESHOLD = 10.4f
+private const val GYRO_MOVING_THRESHOLD = 5.0f
+private const val GYRO_POINT_THRESHOLD = 12.0f
+
+private const val POINTS_PER_SWIPE = 25
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -272,12 +279,16 @@ private fun StepGateScreen(
     onRequestPermission: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val pointsPerSwipe = 12
-    val videos = remember { placeholderVideos }
+    val context = LocalContext.current
+    val pointsPerSwipe = POINTS_PER_SWIPE
+    val videos = remember { loadAssetVideos(context) }
     var currentVideoIndex by remember { mutableIntStateOf(0) }
-    val earnedSwipes = motionState.points / pointsPerSwipe
-    val availableSwipes = (earnedSwipes - currentVideoIndex).coerceAtLeast(0)
-    val pointsTowardNextSwipe = motionState.points % pointsPerSwipe
+    var pointsAtCurrentVideoStart by remember { mutableIntStateOf(motionState.points) }
+    val pointsSinceCurrentVideoStart = (motionState.points - pointsAtCurrentVideoStart)
+        .coerceAtLeast(0)
+    val hasSwipeReady = pointsSinceCurrentVideoStart >= pointsPerSwipe
+    val availableSwipes = if (hasSwipeReady) 1 else 0
+    val pointsTowardNextSwipe = pointsSinceCurrentVideoStart.coerceAtMost(pointsPerSwipe)
     val progress = pointsTowardNextSwipe / pointsPerSwipe.toFloat()
     val canSwipeToNext = motionState.isMoving && availableSwipes > 0
     var verticalDragAmount by remember { mutableFloatStateOf(0f) }
@@ -315,33 +326,39 @@ private fun StepGateScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            VideoPagerPlaceholder(
-                video = videos[currentVideoIndex % videos.size],
-                videoNumber = currentVideoIndex + 1,
-                locked = !canSwipeToNext,
-                isMoving = motionState.isMoving,
-                availableSwipes = availableSwipes,
-                modifier = Modifier.pointerInput(canSwipeToNext, currentVideoIndex) {
-                    detectVerticalDragGestures(
-                        onDragStart = {
-                            verticalDragAmount = 0f
-                        },
-                        onVerticalDrag = { change, dragAmount ->
-                            verticalDragAmount += dragAmount
-                            change.consume()
-                        },
-                        onDragEnd = {
-                            if (verticalDragAmount < -90f && canSwipeToNext) {
-                                currentVideoIndex += 1
+            val currentVideo = videos.getOrNull(currentVideoIndex % videos.size.coerceAtLeast(1))
+            if (currentVideo == null) {
+                EmptyVideoLibrary(modifier = Modifier.fillMaxWidth())
+            } else {
+                VideoPager(
+                    video = currentVideo,
+                    videoNumber = currentVideoIndex + 1,
+                    locked = !canSwipeToNext,
+                    isMoving = motionState.isMoving,
+                    availableSwipes = availableSwipes,
+                    modifier = Modifier.pointerInput(canSwipeToNext, currentVideoIndex) {
+                        detectVerticalDragGestures(
+                            onDragStart = {
+                                verticalDragAmount = 0f
+                            },
+                            onVerticalDrag = { change, dragAmount ->
+                                verticalDragAmount += dragAmount
+                                change.consume()
+                            },
+                            onDragEnd = {
+                                if (verticalDragAmount < -90f && canSwipeToNext) {
+                                    currentVideoIndex += 1
+                                    pointsAtCurrentVideoStart = motionState.points
+                                }
+                                verticalDragAmount = 0f
+                            },
+                            onDragCancel = {
+                                verticalDragAmount = 0f
                             }
-                            verticalDragAmount = 0f
-                        },
-                        onDragCancel = {
-                            verticalDragAmount = 0f
-                        }
-                    )
-                }
-            )
+                        )
+                    }
+                )
+            }
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -455,8 +472,8 @@ private fun MotionGateProgressBanner(
 }
 
 @Composable
-private fun VideoPagerPlaceholder(
-    video: PlaceholderVideo,
+private fun VideoPager(
+    video: AssetVideo,
     videoNumber: Int,
     locked: Boolean,
     isMoving: Boolean,
@@ -490,37 +507,27 @@ private fun VideoPagerPlaceholder(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(it.backgroundColor),
+                    .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                AssetVideoPlayer(
+                    video = it,
+                    shouldPlay = isMoving,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.52f))
+                        .padding(horizontal = 10.dp, vertical = 7.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(54.dp)
-                            .clip(CircleShape)
-                            .background(if (locked) Color(0xFF44444A) else Color(0xFF58D39A)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (locked) "LOCK" else "PLAY",
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
                     Text(
-                        text = it.title,
+                        text = "第 $videoNumber 支",
                         color = Color.White,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "第 $videoNumber 支短影音",
-                        color = Color.White.copy(alpha = 0.78f),
-                        style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
@@ -537,6 +544,53 @@ private fun VideoPagerPlaceholder(
                 .padding(bottom = 18.dp),
             color = Color.White.copy(alpha = 0.86f),
             style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun AssetVideoPlayer(
+    video: AssetVideo,
+    shouldPlay: Boolean,
+    modifier: Modifier = Modifier
+) {
+    var playerView by remember { mutableStateOf<AssetVideoTextureView?>(null) }
+
+    AndroidView(
+        factory = { context ->
+            AssetVideoTextureView(context).also { view ->
+                playerView = view
+                view.configure(video.assetPath, shouldPlay)
+            }
+        },
+        update = { view ->
+            playerView = view
+            view.configure(video.assetPath, shouldPlay)
+        },
+        modifier = modifier
+    )
+
+    DisposableEffect(Unit) {
+        onDispose {
+            playerView?.releasePlayer()
+        }
+    }
+}
+
+@Composable
+private fun EmptyVideoLibrary(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .aspectRatio(9f / 16f)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "找不到 assets/videos 裡的 mp4",
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
     }
@@ -569,18 +623,142 @@ private fun SwipeHint(
     }
 }
 
-private data class PlaceholderVideo(
-    val title: String,
-    val backgroundColor: Color
+private data class AssetVideo(
+    val fileName: String,
+    val assetPath: String
 )
 
-private val placeholderVideos = listOf(
-    PlaceholderVideo("Imported Clip 01", Color(0xFF173D35)),
-    PlaceholderVideo("Imported Clip 02", Color(0xFF4B2E83)),
-    PlaceholderVideo("Imported Clip 03", Color(0xFF7A2E2E)),
-    PlaceholderVideo("Imported Clip 04", Color(0xFF235789)),
-    PlaceholderVideo("Imported Clip 05", Color(0xFF5B4B2A))
-)
+private fun loadAssetVideos(context: Context): List<AssetVideo> {
+    return context.assets.list("videos")
+        ?.filter { it.endsWith(".mp4", ignoreCase = true) }
+        ?.sorted()
+        ?.map { fileName -> AssetVideo(fileName = fileName, assetPath = "videos/$fileName") }
+        .orEmpty()
+}
+
+private class AssetVideoTextureView(context: Context) : TextureView(context),
+    TextureView.SurfaceTextureListener {
+    private var mediaPlayer: MediaPlayer? = null
+    private var currentAssetPath: String? = null
+    private var pendingAssetPath: String? = null
+    private var playbackSurface: android.view.Surface? = null
+    private var videoWidth = 0
+    private var videoHeight = 0
+    private var playerPrepared = false
+    private var shouldPlay = false
+
+    init {
+        surfaceTextureListener = this
+    }
+
+    fun configure(assetPath: String, shouldPlay: Boolean) {
+        this.shouldPlay = shouldPlay
+        if (assetPath == currentAssetPath) {
+            updatePlaybackState()
+            return
+        }
+        pendingAssetPath = assetPath
+        if (isAvailable) {
+            startPendingVideo()
+        }
+    }
+
+    fun releasePlayer() {
+        mediaPlayer?.release()
+        mediaPlayer = null
+        playbackSurface?.release()
+        playbackSurface = null
+        currentAssetPath = null
+        playerPrepared = false
+        videoWidth = 0
+        videoHeight = 0
+    }
+
+    override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
+        startPendingVideo()
+    }
+
+    override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
+        applyFitCenterTransform()
+    }
+
+    override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
+        releasePlayer()
+        return true
+    }
+
+    override fun onSurfaceTextureUpdated(surface: SurfaceTexture) = Unit
+
+    private fun updatePlaybackState() {
+        val player = mediaPlayer ?: return
+        if (!playerPrepared) return
+        if (shouldPlay) {
+            if (!player.isPlaying) {
+                player.start()
+            }
+        } else if (player.isPlaying) {
+            player.pause()
+        }
+    }
+
+    private fun startPendingVideo() {
+        val assetPath = pendingAssetPath ?: return
+        val texture = surfaceTexture ?: return
+        releasePlayer()
+
+        val descriptor = context.assets.openFd(assetPath)
+        playbackSurface = android.view.Surface(texture)
+        mediaPlayer = MediaPlayer().apply {
+            setDataSource(descriptor.fileDescriptor, descriptor.startOffset, descriptor.length)
+            descriptor.close()
+            setSurface(playbackSurface)
+            isLooping = true
+            setOnVideoSizeChangedListener { _, width, height ->
+                this@AssetVideoTextureView.videoWidth = width
+                this@AssetVideoTextureView.videoHeight = height
+                applyFitCenterTransform()
+            }
+            setOnPreparedListener { player ->
+                playerPrepared = true
+                this@AssetVideoTextureView.videoWidth = player.videoWidth
+                this@AssetVideoTextureView.videoHeight = player.videoHeight
+                applyFitCenterTransform()
+                updatePlaybackState()
+            }
+            setOnErrorListener { _, _, _ ->
+                true
+            }
+            prepareAsync()
+        }
+
+        currentAssetPath = assetPath
+        pendingAssetPath = null
+    }
+
+    private fun applyFitCenterTransform() {
+        if (width == 0 || height == 0 || videoWidth == 0 || videoHeight == 0) return
+
+        val viewAspectRatio = width.toFloat() / height.toFloat()
+        val videoAspectRatio = videoWidth.toFloat() / videoHeight.toFloat()
+        val scaleX: Float
+        val scaleY: Float
+
+        if (videoAspectRatio > viewAspectRatio) {
+            scaleX = 1f
+            scaleY = viewAspectRatio / videoAspectRatio
+        } else {
+            scaleX = videoAspectRatio / viewAspectRatio
+            scaleY = 1f
+        }
+
+        setTransform(
+            Matrix().apply {
+                setScale(scaleX, scaleY, width / 2f, height / 2f)
+            }
+        )
+    }
+}
+
 
 @Composable
 private fun MotionStats(

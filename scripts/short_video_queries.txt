@@ -1,0 +1,41 @@
+# One search topic per line.
+# Meme, comedy, popular culture, and everyday-life short-video candidates.
+# Includes Chinese/Taiwanese search terms for Chinese-language clips.
+中文 搞笑 shorts
+中文 迷因 shorts
+台灣 搞笑 shorts
+台灣 迷因 shorts
+台灣 日常 shorts
+華語 搞笑 shorts
+生活 搞笑 shorts
+上班族 搞笑 shorts
+學生 搞笑 shorts
+校園 搞笑 shorts
+情侶 搞笑 shorts
+家庭 搞笑 shorts
+街訪 搞笑 shorts
+反應 迷因 shorts
+梗圖 shorts
+搞笑 短影音
+迷因 短影音
+生活 短影音
+台灣 短影音
+熱門 短影音
+funny shorts
+meme shorts
+viral shorts
+funny moments shorts
+relatable shorts
+daily life shorts
+life hacks shorts
+office comedy shorts
+student life funny shorts
+family funny shorts
+pet funny shorts
+food funny shorts
+street interview funny shorts
+reaction meme shorts
+internet meme shorts
+fail shorts
+wholesome funny shorts
+awkward moments shorts
